@@ -1,4 +1,4 @@
-import { useGLTF } from "@react-three/drei";
+import { useGLTF, Float } from "@react-three/drei";
 
 export function FloatingRocks() {
   const rock1 = useGLTF("models/floating_rock_1.glb");
@@ -7,14 +7,24 @@ export function FloatingRocks() {
 
   return (
     <>
-      <primitive object={rock2.scene} position={[-20.5, -7, -19]} />
-      <primitive object={rock1.scene} position={[-5, 10, -33]} />
-      <primitive object={rock3.scene} position={[20, 3.5, -9]} />
+      {/* Второй камень: скорость 1.5, покачивание по осям вращения 1.6, без движения вверх-вниз */}
+      <Float speed={1.5} rotationIntensity={1.6} floatIntensity={0}>
+        <primitive object={rock2.scene} position={[-20.5, -7, -19]} />
+      </Float>
+
+      {/* Первый камень: дублирует настройки второго */}
+      <Float speed={1.5} rotationIntensity={1.6} floatIntensity={0}>
+        <primitive object={rock1.scene} position={[-5, 10, -33]} />
+      </Float>
+
+      {/* Третий камень: вращается чуть медленнее (интенсивность 1.1) */}
+      <Float speed={1.5} rotationIntensity={1.1} floatIntensity={0}>
+        <primitive object={rock3.scene} position={[20, 3.5, -9]} />
+      </Float>
     </>
   );
 }
 
-// Предзагрузка всех трех моделей в память для сохранения стабильного FPS кадра
 useGLTF.preload("models/floating_rock_1.glb");
 useGLTF.preload("models/floating_rock_2.glb");
 useGLTF.preload("models/floating_rock_3.glb");
