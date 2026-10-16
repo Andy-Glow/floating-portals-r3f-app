@@ -1,43 +1,86 @@
-import { useEffect } from "react";
-import { useGLTF } from "@react-three/drei";
+import { useEffect, useMemo, useRef } from "react";
+import { useThree, useFrame } from "@react-three/fiber";
+import { useGLTF, useTexture } from "@react-three/drei";
 import * as THREE from "three";
+import { FillQuad } from "./FillQuad";
 
 export function Portal() {
   const model = useGLTF("models/portal.glb");
   const mask = useGLTF("models/portal_mask.glb");
 
-  useEffect(() => {
-    // 1. Настройка материалов для рамки портала
-    if (model && model.scene.children.length > 0) {
-      const modelMesh = model.scene.children[0] as THREE.Mesh;
+  const internalSceneRef = useRef<THREE.Scene>(null);
+  const { size } = useThree();
 
-      if (modelMesh.material && !Array.isArray(modelMesh.material)) {
-        const material = modelMesh.material as THREE.MeshStandardMaterial;
-        // Усиливаем интенсивность отражения HDR-карты для красивого блеска арки
-        material.envMapIntensity = 3.5;
-      }
+  const galaxyTexture = useTexture("textures/galaxy.jpg", (texture) => {
+    if (!Array.isArray(texture)) {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.mapping = THREE.EquirectangularReflectionMapping;
+    }
+  });
+
+  const target = useMemo(() => {
+    return new THREE.WebGLRenderTarget(size.width, size.height, {
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      format: THREE.RGBAFormat,
+    });
+  }, [size.width, size.height]);
+
+  useEffect(() => {
+    return () => {
+      target.dispose();
+    };
+  }, [target]);
+
+  useFrame((state) => {
+    if (!internalSceneRef.current) return;
+    state.gl.setRenderTarget(target);
+    state.gl.render(internalSceneRef.current, state.camera);
+    state.gl.setRenderTarget(null);
+  });
+
+  useEffect(() => {
+    if (model) {
+      model.scene.traverse((object) => {
+        if ((object as THREE.Mesh).isMesh) {
+          const mesh = object as THREE.Mesh;
+          if (mesh.material && !Array.isArray(mesh.material)) {
+            (mesh.material as THREE.MeshStandardMaterial).envMapIntensity = 3.5;
+          }
+        }
+      });
     }
 
-    // 2. Настройка материалов для маски (входа в портал)
-    if (mask && mask.scene.children.length > 0) {
-      const maskMesh = mask.scene.children[0] as THREE.Mesh;
+    if (mask) {
+      mask.scene.traverse((object) => {
+        if ((object as THREE.Mesh).isMesh) {
+          object.renderOrder = 5;
+          const mesh = object as THREE.Mesh;
+          if (mesh.material && !Array.isArray(mesh.material)) {
+            const material = mesh.material as THREE.MeshStandardMaterial;
+            material.side = THREE.DoubleSide;
+            material.transparent = false;
+            material.depthWrite = true;
 
-      if (maskMesh.material && !Array.isArray(maskMesh.material)) {
-        const material = maskMesh.material as THREE.MeshStandardMaterial;
-        // Делаем материал двухсторонним, чтобы портал не исчезал при облете камеры сзади
-        material.side = THREE.DoubleSide;
-      }
+            material.stencilWrite = true;
+            material.stencilRef = 1;
+            material.stencilFunc = THREE.AlwaysStencilFunc;
+            material.stencilZPass = THREE.ReplaceStencilOp;
+          }
+        }
+      });
     }
   }, [model, mask]);
 
   return (
     <>
+      <scene ref={internalSceneRef} background={galaxyTexture} />
       <primitive object={model.scene} />
       <primitive object={mask.scene} />
+      <FillQuad map={target.texture} maskId={1} />
     </>
   );
 }
 
-// Предзагружаем оба ассета для удержания стабильного FPS кадра
 useGLTF.preload("models/portal.glb");
 useGLTF.preload("models/portal_mask.glb");

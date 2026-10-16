@@ -3,21 +3,11 @@ import { CanvasScene } from "./components/CanvasScene/CanvasScene";
 
 export default function App() {
   return (
-    <>
-      {/* СЛОЙ 2D: Сюда позже встанут HTML-оверлеи */}
-      <main className="interface-layer">{/* Пока пусто */}</main>
-
-      {/* СЛОЙ 3D: Canvas изолирован */}
-      <div className="webgl-container">
-        <Canvas
-          camera={{
-            position: [10, 10, 10],
-            fov: 45,
-          }}
-        >
-          <CanvasScene />
-        </Canvas>
-      </div>
-    </>
+    <div style={{ width: "100vw", height: "100vh", background: "#000" }}>
+      {/* Принудительно выделяем память под операции трафарета */}
+      <Canvas gl={{ stencil: true }}>
+        <CanvasScene />
+      </Canvas>
+    </div>
   );
 }

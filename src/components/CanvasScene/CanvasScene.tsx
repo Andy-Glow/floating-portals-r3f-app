@@ -1,5 +1,12 @@
 import { memo, Suspense } from "react";
 import { OrbitControls, PerspectiveCamera, Environment, Float } from "@react-three/drei";
+import {
+  EffectComposer,
+  DepthOfField,
+  HueSaturation,
+  BrightnessContrast,
+  ChromaticAberration,
+} from "@react-three/postprocessing";
 import * as THREE from "three";
 import { FloatingIsland } from "./FloatingIsland";
 import { Rocks } from "./Rocks";
@@ -8,33 +15,51 @@ import { FloatingRocks } from "./FloatingRocks";
 import { Trees } from "./Trees";
 import { Words } from "./Words";
 import { Grass } from "./Grass";
+import { SceneParticles } from "./SceneParticles"; // 1. Импортируем светящиеся частицы
+
+const lightColor = new THREE.Color(1, 0.2, 0.1);
 
 export const CanvasScene = memo(function CanvasScene() {
   return (
     <Suspense fallback={null}>
-      {/* Задний фон сцены (текстура) */}
       <Environment background='only' files='textures/bg.hdr' />
-
-      {/* Карта отражений для материалов (HDR) */}
       <Environment background={false} files='textures/envmap.hdr' />
 
-      {/* ГЛАВНЫЙ ЭФФЕКТ ПАРЕНИЯ ОСТРОВА: Медленная скорость 0.5, легкое вращение и покачивание 0.6 */}
+      {/* Остров и все его внутренние объекты плавно парят вместе */}
       <Float speed={0.5} rotationIntensity={0.6} floatIntensity={0.6}>
+        <spotLight
+          penumbra={1}
+          distance={500}
+          angle={60.65 * (Math.PI / 180)}
+          intensity={0.3}
+          color={lightColor}
+          position={[1.19, 10.85, -4.45]}
+        />
+
         <Portal />
         <Rocks />
         <FloatingIsland />
         <Trees />
         <Words />
         <Grass />
+
+        {/* 2. ДОБАВЛЯЕМ ЧАСТИЦЫ ВНУТРЬ FLOAT */}
+        {/* Они будут плавно летать и покачиваться в такт острову */}
+        <SceneParticles />
       </Float>
 
-      {/* Парящие глыбы оставляем вне общего флоата, так как у них свои независимые настройки Float внутри компонента */}
+      {/* Внешние парящие глыбы */}
       <FloatingRocks />
 
-      {/* Настройка камеры автора */}
-      <PerspectiveCamera makeDefault fov={50} position={[-1.75, 10.85, 20.35]} />
+      {/* КИНЕМАТОГРАФИЧНЫЕ ЭФФЕКТЫ ПОСТ-ОБРАБОТКИ АВТОРА */}
+      <EffectComposer stencilBuffer={true}>
+        <DepthOfField target={[1.19, 10.85, -4.45]} focalLength={1.5} bokehScale={1} />
+        <HueSaturation hue={0} saturation={-0.15} />
+        <BrightnessContrast brightness={0.0} contrast={0.035} />
+        <ChromaticAberration radialModulation={true} offset={new THREE.Vector2(0.00175, 0.00175)} />
+      </EffectComposer>
 
-      {/* Контроллер камеры с ограничением вращения под землю */}
+      <PerspectiveCamera makeDefault fov={50} position={[-1.75, 10.85, 20.35]} />
       <OrbitControls
         target={new THREE.Vector3(1, 5, 0)}
         maxPolarAngle={Math.PI * 0.5}
