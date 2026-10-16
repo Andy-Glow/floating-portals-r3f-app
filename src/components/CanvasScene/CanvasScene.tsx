@@ -1,4 +1,4 @@
-import { memo, Suspense } from "react";
+import { memo, Suspense, useMemo } from "react";
 import { OrbitControls, PerspectiveCamera, Environment, Float } from "@react-three/drei";
 import {
   EffectComposer,
@@ -15,11 +15,21 @@ import { FloatingRocks } from "./FloatingRocks";
 import { Trees } from "./Trees";
 import { Words } from "./Words";
 import { Grass } from "./Grass";
-import { SceneParticles } from "./SceneParticles"; // 1. Импортируем светящиеся частицы
+import { SceneParticles } from "./SceneParticles";
 
 const lightColor = new THREE.Color(1, 0.2, 0.1);
 
 export const CanvasScene = memo(function CanvasScene() {
+  // АВТО-ПРОВЕРКА ЖЕЛЕЗА: Проверяем, поддерживает ли видеокарта WebGL 2.0.
+  const isModernGPU = useMemo(() => {
+    try {
+      const canvas = document.createElement("canvas");
+      return !!(window.WebGL2RenderingContext && canvas.getContext("webgl2"));
+    } catch {
+      return false;
+    }
+  }, []);
+
   return (
     <Suspense fallback={null}>
       <Environment background='only' files='textures/bg.hdr' />
@@ -42,22 +52,25 @@ export const CanvasScene = memo(function CanvasScene() {
         <Trees />
         <Words />
         <Grass />
-
-        {/* 2. ДОБАВЛЯЕМ ЧАСТИЦЫ ВНУТРЬ FLOAT */}
-        {/* Они будут плавно летать и покачиваться в такт острову */}
         <SceneParticles />
       </Float>
 
-      {/* Внешние парящие глыбы */}
       <FloatingRocks />
 
-      {/* КИНЕМАТОГРАФИЧНЫЕ ЭФФЕКТЫ ПОСТ-ОБРАБОТКИ АВТОРА */}
-      <EffectComposer stencilBuffer={true}>
-        <DepthOfField target={[1.19, 10.85, -4.45]} focalLength={1.5} bokehScale={1} />
-        <HueSaturation hue={0} saturation={-0.15} />
-        <BrightnessContrast brightness={0.0} contrast={0.035} />
-        <ChromaticAberration radialModulation={true} offset={new THREE.Vector2(0.00175, 0.00175)} />
-      </EffectComposer>
+      {/* УМНАЯ ПОСТОБРАБОТКА: */}
+      {/* Если видеокарта поддерживает WebGL 2.0 — рендерим красивое кино. */}
+      {/* Если это старый ноутбук — рендерим чистую сцену без эффектов, чтобы проект ЗАПУСТИЛСЯ! */}
+      {isModernGPU && (
+        <EffectComposer stencilBuffer={true}>
+          <DepthOfField target={[1.19, 10.85, -4.45]} focalLength={1.5} bokehScale={0.5} />
+          <HueSaturation hue={0} saturation={-0.15} />
+          <BrightnessContrast brightness={0.0} contrast={0.035} />
+          <ChromaticAberration
+            radialModulation={true}
+            offset={new THREE.Vector2(0.00175, 0.00175)}
+          />
+        </EffectComposer>
+      )}
 
       <PerspectiveCamera makeDefault fov={50} position={[-1.75, 10.85, 20.35]} />
       <OrbitControls
