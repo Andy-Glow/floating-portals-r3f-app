@@ -1,4 +1,3 @@
-// Оптимизированный src/components/CanvasScene/CanvasScene.tsx
 import { memo, Suspense } from "react";
 import { OrbitControls, PerspectiveCamera, Environment, Float } from "@react-three/drei";
 import {
@@ -22,26 +21,38 @@ const lightColor = new THREE.Color(1, 0.2, 0.1);
 
 interface CanvasSceneProps {
   isModernGPU: boolean;
+  isLegacy: boolean;
 }
 
-export const CanvasScene = memo(function CanvasScene({ isModernGPU }: CanvasSceneProps) {
+export const CanvasScene = memo(function CanvasScene({ isModernGPU, isLegacy }: CanvasSceneProps) {
   return (
     <Suspense fallback={null}>
-      {/* На мобильных загружаем только карту окружения без прорисовки тяжелого фона */}
-      <Environment background={isModernGPU ? "only" : false} files='textures/bg.hdr' />
-      <Environment background={false} files='textures/envmap.hdr' />
+      {/* Если GPU старый — убираем HDR, ставим обычный сплошной цвет фона для разгрузки памяти */}
+      {isLegacy ? (
+        <color attach='background' args={["#14141a"]} />
+      ) : (
+        <>
+          <Environment background={isModernGPU ? "only" : false} files='textures/bg.hdr' />
+          <Environment background={false} files='textures/envmap.hdr' />
+        </>
+      )}
 
-      <Float speed={0.3} rotationIntensity={0.4} floatIntensity={0.4}>
+      {/* Обычный эмбиент-свет для WebGL1, чтобы сцена не была полностью черной без HDR карты */}
+      {isLegacy && <ambientLight intensity={0.6} color='#7788aa' />}
+
+      <Float speed={isLegacy ? 0 : 0.3} rotationIntensity={0.4} floatIntensity={0.4}>
         <spotLight
           penumbra={1}
-          distance={100} // Уменьшили дистанцию просчета света со 500 до 100
+          distance={100}
           angle={60.65 * (Math.PI / 180)}
-          intensity={0.4}
+          intensity={isLegacy ? 1.5 : 0.4} // Компенсируем отсутствие HDR повышенной яркостью
           color={lightColor}
           position={[1.19, 10.85, -4.45]}
         />
 
-        <Portal />
+        {/* ГЛАВНОЕ ОТСЕЧЕНИЕ: Портал полностью вырезается на WebGL1 устройствах */}
+        {!isLegacy && <Portal />}
+
         <Rocks />
         <FloatingIsland />
         <Trees />
@@ -52,9 +63,9 @@ export const CanvasScene = memo(function CanvasScene({ isModernGPU }: CanvasScen
 
       <FloatingRocks />
 
-      {isModernGPU && (
+      {/* Постобработка включается ТОЛЬКО на полноценном WebGL2 */}
+      {isModernGPU && !isLegacy && (
         <EffectComposer stencilBuffer={true}>
-          {/* Отключаем или упрощаем размытие для удержания 60 FPS */}
           <DepthOfField target={[1.19, 10.85, -4.45]} focalLength={2.0} bokehScale={0.3} />
           <HueSaturation hue={0} saturation={-0.15} />
           <BrightnessContrast brightness={0.0} contrast={0.035} />
@@ -65,7 +76,7 @@ export const CanvasScene = memo(function CanvasScene({ isModernGPU }: CanvasScen
       <PerspectiveCamera makeDefault fov={50} position={[-1.75, 10.85, 20.35]} />
       <OrbitControls
         target={new THREE.Vector3(1, 5, 0)}
-        maxPolarAngle={Math.PI * 0.48} // Слегка ограничили угол, чтобы камера не падала под остров
+        maxPolarAngle={Math.PI * 0.48}
         makeDefault
       />
     </Suspense>
