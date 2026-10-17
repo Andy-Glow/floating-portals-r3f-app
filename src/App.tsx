@@ -1,9 +1,15 @@
 import { Suspense, useMemo, lazy } from "react";
 import { Canvas } from "@react-three/fiber";
 
-const CanvasScene = lazy(() =>
+const ModernScene = lazy(() =>
   import("./components/CanvasScene/CanvasScene").then((module) => ({
     default: module.CanvasScene,
+  })),
+);
+
+const LegacyScene = lazy(() =>
+  import("./components/CanvasScene/LegacyScene").then((module) => ({
+    default: module.LegacyScene,
   })),
 );
 
@@ -11,53 +17,56 @@ export default function App() {
   const gpuStatus = useMemo(() => {
     try {
       const canvas = document.createElement("canvas");
-      const isWebGL2 = !!(window.WebGL2RenderingContext && canvas.getContext("webgl2"));
-      const isWebGL1 = !!(window.WebGLRenderingContext && canvas.getContext("webgl"));
+      const gl2 = canvas.getContext("webgl2");
+      const isWebGL2 = !!(window.WebGL2RenderingContext && gl2);
+
+      const debugInfo = gl2
+        ? gl2.getExtension("WEBGL_debug_renderer_info")
+        : null;
+      const renderer = debugInfo
+        ? gl2!.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL)
+        : "";
+
+      const isOldGPU =
+        renderer.includes("7600") ||
+        renderer.includes("HD Graphics 4000") ||
+        renderer.includes("Intel");
 
       return {
-        webgl2: isWebGL2,
-        supported: isWebGL2 || isWebGL1,
-        // Если это старый ноут, помечаем его как "экстремально слабый"
-        isLegacy: !isWebGL2 && isWebGL1,
+        webgl2: isWebGL2 && !isOldGPU,
+        isLegacy:
+          !isWebGL2 || isOldGPU || navigator.userAgent.includes("Mobile"),
       };
     } catch {
-      return { webgl2: false, supported: false, isLegacy: true };
+      return { webgl2: false, isLegacy: true };
     }
   }, []);
 
-  // Если WebGL вообще не поддерживается браузером
-  if (!gpuStatus.supported) {
-    return (
-      <div
-        style={{
-          color: "#fff",
-          padding: 20,
-          textAlign: "center",
-          background: "#111",
-          height: "100vh",
-        }}>
-        <h3>Ваш браузер или видеокарта не поддерживают WebGL рендеринг.</h3>
-        <p>Пожалуйста, обновите драйверы видеокарты или используйте современный браузер.</p>
-      </div>
-    );
-  }
-
   return (
-    <div style={{ width: "100vw", height: "100vh", background: "#111", overflow: "hidden" }}>
+    <div
+      style={{
+        width: "100vw",
+        height: "100vh",
+        background: "#111",
+        overflow: "hidden",
+      }}
+    >
       <Canvas
-        // На старых GPU жестко режем dpr до 0.75-1.0 (сильный прирост FPS на HD7600m)
-        dpr={gpuStatus.isLegacy ? 0.75 : [1, 1.5]}
+        dpr={gpuStatus.isLegacy ? 1 : [1, 1.5]}
         gl={{
-          // На legacy-системах отключаем stencil, чтобы предотвратить белый экран в Chromium
-          stencil: !gpuStatus.isLegacy,
-          antialias: gpuStatus.webgl2,
+          stencil: !gpuStatus.isLegacy, // Включаем обратно для работы портала, если вдруг запустится ModernScene
+          antialias: !gpuStatus.isLegacy,
           alpha: false,
-          powerPreference: "high-performance",
-          // Включаем совместимость с WebGL1, если WebGL2 заблокирован в Chrome
-          failIfMajorPerformanceCaveat: false,
-        }}>
+          powerPreference: "default", // Предотвращает вылеты переключаемой графики AMD Enduro
+          failIfMajorPerformanceCaveat: false, // КРИТИЧЕСКИ: не падать при предупреждениях производительности
+        }}
+      >
         <Suspense fallback={null}>
-          <CanvasScene isModernGPU={gpuStatus.webgl2} isLegacy={gpuStatus.isLegacy} />
+          {gpuStatus.isLegacy ? (
+            <LegacyScene />
+          ) : (
+            <ModernScene isModernGPU={gpuStatus.webgl2} />
+          )}
         </Suspense>
       </Canvas>
     </div>
