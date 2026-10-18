@@ -1,9 +1,8 @@
-import { Suspense, lazy, useState } from "react";
+import { Suspense, lazy, useState, useEffect } from "react";
 import { Canvas } from "@react-three/fiber";
-import { Preloader } from "./components/ui/Preloader";
+import { useProgress } from "@react-three/drei";
+import { usePerformanceMonitor } from "./hooks/usePerformanceMonitor";
 
-// ДИНАМИЧЕСКИЙ РАЗДЕЛ БАНДЛА (Lazy Loading):
-// Тяжелый пак постобработки ModernScene изолирован в отдельном чанке и не скачивается на слабых ПК.
 const ModernScene = lazy(() =>
   import("./components/scene/CanvasScene").then((module) => ({
     default: module.CanvasScene,
@@ -16,45 +15,72 @@ const LegacyScene = lazy(() =>
   })),
 );
 
-export default function App() {
-  // Состояние отображения экрана прелоадера (по умолчанию включен при старте)
-  const [isLoading, setIsLoading] = useState(true);
+// Локальный контроллер внутри контекста Canvas
+function SceneController({ onDropToLegacy }: { onDropToLegacy: () => void }) {
+  // Мониторим живой FPS в процессе отрисовки
+  const shouldDrop = usePerformanceMonitor(35, 2500);
 
-  // Управляющий флаг выбора графического движка (false = Modern, true = Legacy)
+  useEffect(() => {
+    if (shouldDrop) {
+      onDropToLegacy();
+    }
+  }, [shouldDrop, onDropToLegacy]);
+
+  return null;
+}
+
+export default function App() {
+  const { progress } = useProgress();
+  const [isLoading, setIsLoading] = useState(true);
   const [isLegacyMode, setIsLegacyMode] = useState(false);
 
-  /**
-   * КОЛБЭК ОКОНЧАНИЯ ТЕСТИРОВАНИЯ И ЗАГРУЗКИ:
-   * Вызывается компонентом Preloader, когда модели скачаны до 100%,
-   * а бенчмарк FPS выдал точный вердикт о производительности системы.
-   */
-  const handleLoadingComplete = (triggeredLegacy: boolean) => {
-    setIsLegacyMode(triggeredLegacy); // Фиксируем графический режим
-    setIsLoading(false); // Плавно демонтируем прелоадер с экрана
-  };
+  // Ждем, пока ассеты Drei загрузятся из сети на 100%
+  useEffect(() => {
+    if (progress >= 100) {
+      const timer = setTimeout(() => setIsLoading(false), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [progress]);
 
   return (
-    // Класс .webgl-container из main.scss фиксирует холст по границам экрана
-    <div className='webgl-container'>
-      {/* Показываем прелоадер поверх холста, пока идет загрузка ассетов и замер FPS */}
-      {isLoading && <Preloader onComplete={handleLoadingComplete} />}
+    <div className="webgl-container">
+      {/* HTML-прелоадер */}
+      {isLoading && (
+        <div className={`preloader-overlay ${progress >= 100 ? "fade-out" : ""}`}>
+          <div className="loader-container">
+            <h2 className="loader-title">LOADING DIMENSION</h2>
+            <div className="progress-track">
+              <div className="progress-bar" style={{ width: `${progress}%` }} />
+            </div>
+            <p className="progress-text">{Math.round(progress)}%</p>
+          </div>
+        </div>
+      )}
 
-      {/* Глобальный WebGL холст инициализируется с адаптивными параметрами под выбранный режим */}
       <Canvas
-        // На слабом железе фиксируем dpr на 1, спасая филлрейт видеокарты в 3 раза
         dpr={isLegacyMode ? 1 : [1, 1.5]}
         gl={{
-          stencil: !isLegacyMode, // Стенсил-буфер включается только для 3D-эффекта купола Modern-арки
-          antialias: !isLegacyMode, // Отключаем ресурсоемкое сглаживание MSAA на слабом железе
+          stencil: true, // Включаем буфер для первичного тестового прохода ModernScene
+          antialias: !isLegacyMode,
           alpha: false,
-          powerPreference: "default", // Предотвращает краш Chromium на ноутбуках со сдвоенной графикой
-          failIfMajorPerformanceCaveat: false, // Запрещаем Three.js блокировать запуск на медленных GPU
-        }}>
-        {/* Suspense удерживает поток отрисовки, пока чанки кода сцен монтируются в граф Three.js */}
+          powerPreference: "default",
+          failIfMajorPerformanceCaveat: false,
+        }}
+      >
+        {/* Инжектируем контроллер живого FPS внутрь WebGL-контекста */}
+        <SceneController onDropToLegacy={() => setIsLegacyMode(true)} />
+
         <Suspense fallback={null}>
-          {isLegacyMode ? <LegacyScene /> : <ModernScene isModernGPU={true} />}
+          {isLegacyMode ? (
+            <LegacyScene />
+          ) : (
+            <ModernScene isModernGPU={true} />
+          )}
         </Suspense>
       </Canvas>
     </div>
   );
 }
+
+
+
