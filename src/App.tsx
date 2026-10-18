@@ -1,72 +1,58 @@
-import { Suspense, useMemo, lazy } from "react";
+import { Suspense, lazy, useState } from "react";
 import { Canvas } from "@react-three/fiber";
+import { Preloader } from "./components/ui/Preloader";
 
+// ДИНАМИЧЕСКИЙ РАЗДЕЛ БАНДЛА (Lazy Loading):
+// Тяжелый пак постобработки ModernScene изолирован в отдельном чанке и не скачивается на слабых ПК.
 const ModernScene = lazy(() =>
-  import("./components/CanvasScene/CanvasScene").then((module) => ({
+  import("./components/scene/CanvasScene").then((module) => ({
     default: module.CanvasScene,
   })),
 );
 
 const LegacyScene = lazy(() =>
-  import("./components/CanvasScene/LegacyScene").then((module) => ({
+  import("./components/scene/LegacyScene").then((module) => ({
     default: module.LegacyScene,
   })),
 );
 
 export default function App() {
-  const gpuStatus = useMemo(() => {
-    try {
-      const canvas = document.createElement("canvas");
-      const gl2 = canvas.getContext("webgl2");
-      const isWebGL2 = !!(window.WebGL2RenderingContext && gl2);
+  // Состояние отображения экрана прелоадера (по умолчанию включен при старте)
+  const [isLoading, setIsLoading] = useState(true);
 
-      const debugInfo = gl2
-        ? gl2.getExtension("WEBGL_debug_renderer_info")
-        : null;
-      const renderer = debugInfo
-        ? gl2!.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL)
-        : "";
+  // Управляющий флаг выбора графического движка (false = Modern, true = Legacy)
+  const [isLegacyMode, setIsLegacyMode] = useState(false);
 
-      const isOldGPU =
-        renderer.includes("7600") ||
-        renderer.includes("HD Graphics 4000") ||
-        renderer.includes("Intel");
-
-      return {
-        webgl2: isWebGL2 && !isOldGPU,
-        isLegacy:
-          !isWebGL2 || isOldGPU || navigator.userAgent.includes("Mobile"),
-      };
-    } catch {
-      return { webgl2: false, isLegacy: true };
-    }
-  }, []);
+  /**
+   * КОЛБЭК ОКОНЧАНИЯ ТЕСТИРОВАНИЯ И ЗАГРУЗКИ:
+   * Вызывается компонентом Preloader, когда модели скачаны до 100%,
+   * а бенчмарк FPS выдал точный вердикт о производительности системы.
+   */
+  const handleLoadingComplete = (triggeredLegacy: boolean) => {
+    setIsLegacyMode(triggeredLegacy); // Фиксируем графический режим
+    setIsLoading(false); // Плавно демонтируем прелоадер с экрана
+  };
 
   return (
-    <div
-      style={{
-        width: "100vw",
-        height: "100vh",
-        background: "#111",
-        overflow: "hidden",
-      }}
-    >
+    // Класс .webgl-container из main.scss фиксирует холст по границам экрана
+    <div className='webgl-container'>
+      {/* Показываем прелоадер поверх холста, пока идет загрузка ассетов и замер FPS */}
+      {isLoading && <Preloader onComplete={handleLoadingComplete} />}
+
+      {/* Глобальный WebGL холст инициализируется с адаптивными параметрами под выбранный режим */}
       <Canvas
-        dpr={gpuStatus.isLegacy ? 1 : [1, 1.5]}
+        // На слабом железе фиксируем dpr на 1, спасая филлрейт видеокарты в 3 раза
+        dpr={isLegacyMode ? 1 : [1, 1.5]}
         gl={{
-          stencil: !gpuStatus.isLegacy, // Включаем обратно для работы портала, если вдруг запустится ModernScene
-          antialias: !gpuStatus.isLegacy,
+          stencil: !isLegacyMode, // Стенсил-буфер включается только для 3D-эффекта купола Modern-арки
+          antialias: !isLegacyMode, // Отключаем ресурсоемкое сглаживание MSAA на слабом железе
           alpha: false,
-          powerPreference: "default", // Предотвращает вылеты переключаемой графики AMD Enduro
-          failIfMajorPerformanceCaveat: false, // КРИТИЧЕСКИ: не падать при предупреждениях производительности
-        }}
-      >
+          powerPreference: "default", // Предотвращает краш Chromium на ноутбуках со сдвоенной графикой
+          failIfMajorPerformanceCaveat: false, // Запрещаем Three.js блокировать запуск на медленных GPU
+        }}>
+        {/* Suspense удерживает поток отрисовки, пока чанки кода сцен монтируются в граф Three.js */}
         <Suspense fallback={null}>
-          {gpuStatus.isLegacy ? (
-            <LegacyScene />
-          ) : (
-            <ModernScene isModernGPU={gpuStatus.webgl2} />
-          )}
+          {isLegacyMode ? <LegacyScene /> : <ModernScene isModernGPU={true} />}
         </Suspense>
       </Canvas>
     </div>

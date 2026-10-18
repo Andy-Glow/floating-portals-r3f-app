@@ -1,10 +1,45 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>floating-portals-r3f-app</title>
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.png" />
+
+    <!-- АДАПТИВНОСТЬ: Запрещаем масштабирование пальцами на мобильных девайсах, 
+         чтобы OrbitControls работал корректно и сцена не "дёргалась" при жестах -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+    <title>Floating Portals — Интерактивная 3D Диорама</title>
+
+    <meta
+      name="description"
+      content="Интерактивная трехмерная WebGL диорама парящего космического острова с эффектом 3D-портала. Оптимизировано под слабые системы." />
+    <meta
+      name="keywords"
+      content="React, Three.js, React Three Fiber, WebGL, 3D Portal, Оптимизация" />
+    <meta name="author" content="Andy-Glow" />
+
+    <!-- МЕТА-ТЕГИ OPEN GRAPH (Для Telegram, Discord, VK, WhatsApp) -->
+    <!-- og:type указывает мессенджерам, что это стандартный веб-сайт -->
+    <meta property="og:type" content="website" />
+    <!-- og:title — жирный заголовок карточки в превью -->
+    <meta property="og:title" content="Floating Portals — Интерактивная 3D Диорама" />
+    <!-- og:description — краткое описание под заголовком в карточке превью -->
+    <meta
+      property="og:description"
+      content="Загляните в другое измерение! Космический парящий остров с честным 3D-порталом и адаптивным движком под любое железо." />
+    <!-- og:image — Ссылка на картинку-превью (подтягивается из папки public при сборке) -->
+    <meta property="og:image" content="/preview.jpg" />
+
+    <!-- МЕТА-ТЕГИ ДЛЯ TWITTER / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Floating Portals — Интерактивная 3D Диорама" />
+    <meta
+      name="twitter:description"
+      content="Космический парящий остров с честным 3D-порталом и адаптивным движком под любое железо." />
+    <meta name="twitter:image" content="/preview.png" />
   </head>
   <body>
     <div id="root"></div>

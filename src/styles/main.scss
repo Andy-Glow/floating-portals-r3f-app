@@ -1,40 +1,114 @@
-@use "variables" as *;
+@use "variables" as *; // Импортируем глобальные переменные (цвета, брейкпоинты) в текущую область видимости
 
+// ГЛОБАЛЬНЫЙ СБРОС СТИЛЕЙ (Reset): Убираем дефолтные отступы браузера
 * {
-  box-sizing: border-box;
+  box-sizing: border-box; // Включаем border-box, чтобы внутренние отступы не раздували размеры блоков
   margin: 0;
   padding: 0;
 }
 
+// НАСТРОЙКА КОРНЕВЫХ КОНТЕЙНЕРОВ ОКНА:
+// Жестко растягиваем приложение на всю ширину и высоту экрана устройства.
 body,
 html,
 #root {
   width: 100%;
   height: 100%;
-  overflow: hidden;
-  background-color: $bg-color;
+  overflow: hidden; // КРИТИЧЕСКИ: Запрещаем скроллбар, чтобы при тач-свайпах сцена не дергалась в браузере
+  background-color: $bg-color; // Берем темный фоновый цвет из переменных
   font-family:
     system-ui,
     -apple-system,
-    sans-serif;
+    sans-serif; // Инициализируем быстрый системный шрифт без засечек
   color: $text-color;
 }
 
-// Контейнер для 3D сцены (занимает весь экран под 2D интерфейсом)
+// КОНТЕЙНЕР ДЛЯ РЕНДЕРИНГА 3D-СЦЕНЫ (Холст Canvas):
+// ИСПРАВЛЕНО: Заменили absolute на fixed. Теперь контейнер монолитно прибит к границам экрана
+// под всеми будущими слоями HTML-интерфейса.
 .webgl-container {
   width: 100%;
   height: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1; // Самый нижний графический слой
+}
+
+// СЛОЙ ДЛЯ 2D-ИНТЕРФЕЙСА (Прелоадер, Меню, Настройки):
+// ИСПРАВЛЕНО: Изменили relative на absolute, чтобы HTML-элементы можно было ювелирно центрировать поверх 3D.
+.interface-layer {
   position: absolute;
   top: 0;
   left: 0;
-  z-index: 1;
-}
-
-// Класс для слоя 2D-интерфейса
-.interface-layer {
-  position: relative;
-  z-index: 2;
-  pointer-events: none;
+  z-index: 2; // Перекрывает WebGL-холст сверху
   width: 100%;
   height: 100%;
+  pointer-events: none; // КРИТИЧЕСКИ: Пропускает клики мыши сквозь себя, чтобы OrbitControls продолжал вращать остров
+
+  // Вложенный селектор: активирует кликабельность для кнопок и форм внутри слоя интерфейса
+  .interactive-element {
+    pointer-events: auto;
+  }
+}
+
+// СТИЛИ ГЛОБАЛЬНОГО ПРЕЛОАДЕРА (Экран загрузки)
+.preloader-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: $bg-color; // Берем темный цвет из переменных
+  z-index: 9999; // Перекрывает абсолютно все 2D и 3D слои на сайте
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  pointer-events: auto; // Блокируем клики по сцене, пока идет загрузка
+  transition: opacity 0.3s ease-in-out;
+  opacity: 1;
+
+  // Класс-модификатор для плавного исчезновения
+  &.fade-out {
+    opacity: 0;
+  }
+
+  // Внутренний контейнер прогресс-бара
+  .loader-container {
+    width: 240px;
+    text-align: center;
+
+    .loader-title {
+      color: $text-color;
+      margin-bottom: 15px;
+      font-size: 18px;
+      font-weight: 400;
+      letter-spacing: 1px;
+    }
+
+    // Подложка (серая дорожка) полосы загрузки
+    .progress-track {
+      width: 100%;
+      height: 4px;
+      background-color: #1c1c1c;
+      border-radius: 2px;
+      overflow: hidden;
+
+      // Активная багровая полоса, которая будет расти
+      .progress-bar {
+        height: 100%;
+        background-color: $accent-color;
+        transition: width 0.1s ease-out;
+      }
+    }
+
+    // Текстовый вывод процентов загрузки
+    .progress-text {
+      color: #a0a0a0;
+      margin-top: 10px;
+      font-size: 12px;
+      letter-spacing: 2px;
+    }
+  }
 }
