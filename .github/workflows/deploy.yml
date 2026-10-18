@@ -32,9 +32,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-
-       Sir: Build project
-        run: npm run build -- --skipLibCheck
+      - name: Build project
+        run: npm run build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
@@ -44,4 +43,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
