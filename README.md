@@ -1,75 +1,36 @@
-# React + TypeScript + Vite
+# Floating Portals — Интерактивная 3D Диорама
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Интерактивная трехмерная WebGL диорама парящего космического острова с честным кинематографичным эффектом 3D-портала. Проект построен на базе **React 19**, **Three.js**, **React Three Fiber** и **TypeSctipt**, демонстрируя передовые техники оптимизации рендеринга высокой плотности как для десктопных систем, так и для мобильных устройств. Вдохновлён оригинальным видео-плейлистом автора ютуб-канала Irradiance.
 
-Currently, two official plugins are available:
+**[Ссылка на живой проект](https://andy-glow.github.io/floating-portals-r3f-app/)**
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## Ключевые технологические особенности
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **3D-Портал (Render-to-Texture Pass):** Внутренность портала — это изолированная виртуальная сцена вселенной с эффектом параллакса. Камера портала синхронизирована с основной камерой через Offscreen-буфер (`WebGLRenderTarget`), создавая иллюзию физического объема внутри арки.
+- **Аппаратное трафаретное отсечение (Stencil Masking):** Проем арки размечается в невидимом буфере трафарета с помощью низкоуровневых WebGL-инструкций (`THREE.ReplaceStencilOp`). Полноэкранный кастомный шейдер `FillQuad` выводит текстуру космоса строго внутри этой маски, отсекая лишнюю геометрию.
+- **Полная совместимость с React Compiler:** Архитектура компонентов переписана под строгие правила иммутабельности React 19. Применено изолированное кэширование и глубокое клонирование 3D-нод (`.clone(true)`) внутри `useMemo`, что защищает глобальный кэш Drei от мутаций и убирает ошибки компилятора.
+- **Умная мобильная оптимизация (Адаптивный Fillrate):**
+  - **Контроль плотности пикселей:** На смартфонах `dpr` фиксируется на значении `1`, снижая площадь просчета пикселей на Retina/OLED экранах в 3 раза и полностью предотвращая перегрев процессора.
+  - **Динамический даунскейл портала:** На мобильных девайсах разрешение рендер-таргета космоса снижается в 1.5 раза.
+  - **Облегченная постобработка:** Тяжелое субпиксельное размытие заднего плана (`DepthOfField`) автоматически отключается на мобильных GPU, сохраняя при этом легкую хроматическую аберрацию и контрастность.
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Архитектура и стек технологий
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- **Ядро:** React 19 (Strict Mode) & TypeScript
+- **3D-Движок:** Three.js (r157+)
+- **Связующий слой:** `@react-three/fiber` (React-интеграция для Three.js)
+- **Библиотека компонентов Drei:** `@react-three/drei` (управление камерами, загрузка GLTF/HDRI ассетов, системы частиц)
+- **Постобработка:** `@react-three/postprocessing` (Хроматическая аберрация, Контраст, Глубина резкости)
+- **Сборщик и Стили:** Vite, Sass/SCSS (модульная архитектура `@use`)
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+---
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Оптимизация памяти (Garbage Collector Protection)
 
-```
+Все статические массивы трансформаций (`position`, `rotation`, `scale`) и строковые хэши цветов (`#ff261a`) вынесены в глобальные константы за пределы функций рендеринга React. Это предотвращает постоянное перевыделение оперативной памяти JavaScript (до 120 раз в секунду при покачивании острова) и полностью избавляет приложение от микрофризов.
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
-```
+---
