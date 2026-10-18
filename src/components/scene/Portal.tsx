@@ -4,71 +4,75 @@ import { useGLTF, useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import { FillQuad } from "./FillQuad";
 
-export function Portal() {
-  // Загружаем оригинальные 3D-ассеты рамки и маски портала из кэша Drei
+// Строго указываем TypeScript, что компонент принимает флаг мобильного устройства
+interface PortalProps {
+  isMobile: boolean;
+}
+
+export function Portal({ isMobile }: PortalProps) {
+  // Асинхронно загружаем оригинальные 3D-модели каменной рамки и плоскости-маски из кэша Drei
   const modelGltf = useGLTF("models/portal.glb");
   const maskGltf = useGLTF("models/portal_mask.glb");
 
-  // Ссылка на изолированную виртуальную сцену "другого измерения"
+  // Создаем ссылку на изолированную виртуальную сцену, где будет рендериться скрытый космос
   const internalSceneRef = useRef<THREE.Scene>(null);
 
-  // Получаем параметры размеров экрана и вьюпорта
-  const { size, viewport } = useThree();
-  const isMobile = viewport.width < 6;
+  // Извлекаем физические размеры окна рендеринга из контекста Three.js
+  const { size } = useThree();
 
-  // Оптимизация филлрейта: на мобильных девайсах снижаем разрешение скрытого рендеринга в 1.5 раза
+  // МОБИЛЬНАЯ ОПТИМИЗАЦИЯ: На смартфонах делим разрешение скрытого рендеринга на 1.5.
+  // Это в разы разгружает пиксельные конвейеры мобильных GPU, сохраняя стабильные 60 FPS.
   const targetResolutionDivider = isMobile ? 1.5 : 1;
 
-  // Загружаем тяжелую текстуру космической галактики для Modern-режима
+  // Загружаем панорамную текстуру вселенной для проецирования внутрь портала
   const galaxyTexture = useTexture("textures/galaxy.jpg", (texture) => {
     if (!Array.isArray(texture)) {
-      texture.colorSpace = THREE.SRGBColorSpace;
-      texture.mapping = THREE.EquirectangularReflectionMapping; // Сферическое проецирование текстуры
-      texture.minFilter = THREE.LinearFilter;
+      texture.colorSpace = THREE.SRGBColorSpace; // Включаем правильное цветовое пространство sRGB
+      texture.mapping = THREE.EquirectangularReflectionMapping; // Сферическое (панорамное) отображение
+      texture.minFilter = THREE.LinearFilter; // Линейная фильтрация для сглаживания пикселей
       texture.generateMipmaps = false; // Отключаем генерацию мип-мап для экономии видеопамяти
     }
   });
 
   /**
-   * КЛОНИРОВАНИЕ И НАСТРОЙКА ДЛЯ REACT COMPILER:
-   * Мы создаем независимые глубокие копии рамки и маски портала внутри одного useMemo.
-   * Все манипуляции со свойствами материалов происходят на клонированных объектах,
-   * что гарантирует 100% иммунитет от ошибок React Compiler и защищает глобальный кэш Drei.
+   * ЭТАЛОННАЯ НАСТРОЙКА АССЕТОВ (Защита React Compiler):
+   * Клонируем рамку и маску, изолируя операции от глобального кэша Drei.
+   * Функция срабатывает строго при изменении исходных моделей или флага устройства.
    */
   const optimizedScenes = useMemo(() => {
     if (!modelGltf || !maskGltf) return null;
 
+    // Создаем глубокие независимые копии объектов Three.js
     const clonedModel = modelGltf.scene.clone(true);
     const clonedMask = maskGltf.scene.clone(true);
 
-    // 1. Оптимизация материалов внешней рамки портала
+    // Настраиваем материалы каменной рамки портала
     clonedModel.traverse((object) => {
       if ((object as THREE.Mesh).isMesh) {
         const mesh = object as THREE.Mesh;
         if (mesh.material && !Array.isArray(mesh.material)) {
-          // Динамически снижаем интенсивность отражений на смартфонах
+          // На смартфонах приглушаем интенсивность отражений HDR-карты, чтобы не перегружать шейдер
           (mesh.material as THREE.MeshStandardMaterial).envMapIntensity = isMobile ? 1.5 : 3.5;
         }
       }
     });
 
-    // 2. Низкоуровневая разметка трафарета на материале маски
+    // Настраиваем низкоуровневую работу трафарета (Stencil) на геометрии маски
     clonedMask.traverse((object) => {
       if ((object as THREE.Mesh).isMesh) {
-        object.renderOrder = 5; // Маска должна отрендериться строго ПЕРЕД FillQuad
+        object.renderOrder = 5; // Маска обязана отрендериться строго ПЕРЕД полноэкранным FillQuad
         const mesh = object as THREE.Mesh;
         if (mesh.material && !Array.isArray(mesh.material)) {
           const material = mesh.material as THREE.MeshStandardMaterial;
-
-          material.side = THREE.DoubleSide; // Двухсторонний рендеринг маски под любым углом
+          material.side = THREE.DoubleSide; // Двухсторонний рендеринг для стабильности под любым углом обзора
           material.transparent = false;
-          material.depthWrite = true; // Записываем маску в буфер глубины
+          material.depthWrite = true; // Записываем маску в буфер глубины кадра
 
-          // НАСТРОЙКА STENCIL КОНВЕЙЕРА:
-          material.stencilWrite = true; // Включаем запись в буфер трафарета кадра
-          material.stencilRef = 1; // Каждому пикселю маски присваиваем ID = 1
-          material.stencilFunc = THREE.AlwaysStencilFunc; // Записывать значение всегда, без проверок
-          material.stencilZPass = THREE.ReplaceStencilOp; // Заменять старый пиксель трафарета на stencilRef
+          // НАСТРОЙКА СТЕНСИЛ-КОНВЕЙЕРА:
+          material.stencilWrite = true; // Разрешаем запись в буфер трафарета
+          material.stencilRef = 1; // Присваиваем пикселям этой геометрии идентификационный номер = 1
+          material.stencilFunc = THREE.AlwaysStencilFunc; // Записывать значение всегда, без предварительных проверок
+          material.stencilZPass = THREE.ReplaceStencilOp; // Заменять старое значение трафарета на stencilRef (на единицу)
         }
       }
     });
@@ -76,7 +80,7 @@ export function Portal() {
     return { model: clonedModel, mask: clonedMask };
   }, [modelGltf, maskGltf, isMobile]);
 
-  // Создаем виртуальный буфер рендеринга (текстуру в памяти) под размер холста
+  // Создаем виртуальный буфер рендеринга (Offscreen Framebuffer) под размер экрана
   const target = useMemo(() => {
     return new THREE.WebGLRenderTarget(
       Math.floor(size.width / targetResolutionDivider),
@@ -85,8 +89,8 @@ export function Portal() {
         minFilter: THREE.LinearFilter,
         magFilter: THREE.LinearFilter,
         format: THREE.RGBAFormat,
-        depthBuffer: true, // Буфер глубины жизненно необходим для корректного параллакса внутри
-        stencilBuffer: true, // Буфер трафарета связывает маску и финальный экран FillCN
+        depthBuffer: true, // Буфер глубины необходим для корректного параллакса объектов внутри
+        stencilBuffer: true, // Буфер трафарета связывает маску проема арки с финальным выводом
       },
     );
   }, [size.width, size.height, targetResolutionDivider]);
@@ -96,17 +100,16 @@ export function Portal() {
     return () => target.dispose();
   }, [target]);
 
-  // СУПЕР-ЗАХВАТ КАДРА (Render-to-Texture Loop):
-  // Перехватываем стандартный цикл отрисовки Three.js. Разворачиваем камеру в скрытую сцену
-  // космоса, фотографируем её в WebGLRenderTarget и возвращаем основной рендерер к диораме.
+  // СУПЕР-ЗАХВАТ КАДРА (Render Loop): Каждый кадр разворачиваем камеру в скрытую сцену
+  // космоса, фотографируем её в WebGLRenderTarget и возвращаем рендерер к основной диораме.
   useFrame((state) => {
     if (!internalSceneRef.current) return;
-    state.gl.setRenderTarget(target);
-    state.gl.render(internalSceneRef.current, state.camera);
-    state.gl.setRenderTarget(null);
+    state.gl.setRenderTarget(target); // Перенаправляем поток вычислений GPU во внутренний буфер
+    state.gl.render(internalSceneRef.current, state.camera); // Отрисовываем изолированную вселенную
+    state.gl.setRenderTarget(null); // Возвращаем рендерер на стандартный экран пользователя
   });
 
-  // Пока ассеты или клоны не готовы — сдерживаем отрисовку
+  // Если 3D-клоны или текстуры еще компилируются — удерживаем отрисовку
   if (!optimizedScenes) return null;
 
   return (
@@ -114,18 +117,18 @@ export function Portal() {
       {/* Изолированная сцена «другого измерения» */}
       <scene ref={internalSceneRef} background={galaxyTexture} />
 
-      {/* Сама рамка портала */}
+      {/* Каменная рамка портала */}
       <primitive object={optimizedScenes.model} />
 
-      {/* Невидимая плоскость-заглушка, которая размечает пиксели в буфере трафарета */}
+      {/* Невидимая плоскость-заглушка, размечающая пиксели в буфере трафарета */}
       <primitive object={optimizedScenes.mask} />
 
-      {/* Финальный шейдер, который выводит текстуру космоса строго внутри размеченной маски */}
+      {/* Финальный полноэкранный меш, выводящий текстуру космоса строго внутри маски */}
       <FillQuad map={target.texture} maskId={1} />
     </>
   );
 }
 
-// Предзагрузка ассетов в память для обеспечения стабильного FPS без фризов при старте
+// Предзагрузка ассетов в оперативную память для обеспечения плавного старта без микрофризов
 useGLTF.preload("models/portal.glb");
 useGLTF.preload("models/portal_mask.glb");
